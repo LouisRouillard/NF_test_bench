@@ -1,3 +1,5 @@
+from typing import List, Dict, Tuple
+
 import tensorflow as tf
 
 from tensorflow.keras.layers import (
