@@ -11,7 +11,7 @@ from set_transformers.tensorflow.models import SetTransformer
 
 # %% Set Transformer build
 
-d = 8
+d = 8  # ! should equal `num_heads * key_dim``
 num_heads = 2
 key_dim = 4
 k = 1
@@ -77,9 +77,8 @@ n_samples = 1000
 set_len = 20
 min_mask_len, max_mask_len = 2, 21
 
-min_center, max_center = 1, 100
-min_spread, max_spread = -6, 6
-min_scale, max_scale = 1, 10
+min_scale, max_scale = 5, 20
+min_center, max_center = min_scale + 1, 200 - max_scale - 1  # ! Beware of the masking value at 0
 
 len_mask = tf.random.uniform((n_samples,), min_mask_len, max_mask_len, dtype=tf.int32)
 mask = tf.stack(
@@ -87,20 +86,22 @@ mask = tf.stack(
         tf.concat([tf.ones((l,)), tf.zeros((max_mask_len - 1 - l,))], axis=0)
         for l in len_mask
     ]
-)
+)  # ? Values at 0 will be masked
 
 x = (
     (
-        tf.random.uniform((n_samples, 1, 1), min_scale, max_scale)  # set spread scale
-        * tf.random.uniform((n_samples, set_len, 1), min_spread, max_spread)  # set spread
+        tf.random.uniform((n_samples, 1, 1), min_scale, max_scale)  # ? set spread scale
+        * tf.random.uniform((n_samples, set_len, 1), -1, 1)  # ? set spread
     )
     +
-    tf.random.uniform((n_samples, 1, 1), min_center, max_center)  # set center
+    tf.random.uniform((n_samples, 1, 1), min_center, max_center)  # ? set center
 ) * tf.reshape(mask, (n_samples, set_len, 1))
 
 # %% Target invariant function
 
-y = tf.math.reduce_mean(x, axis=1, keepdims=True)
+target_invariant_function = tf.reduce_mean
+
+y = target_invariant_function(x, axis=1, keepdims=True)
 
 # %% Model training
 
@@ -112,26 +113,26 @@ model.fit(
     x=x,
     y=y,
     epochs=100,
-    batch_size=20
+    batch_size=20,
+    verbose=2
 )
 
 # %% Test set generation
 
-test_set_len = 200
+test_set_len = 2_000
 
 test_min_center, test_max_center = min_center, max_center
-test_min_spread, test_max_spread = min_spread, max_spread
 test_min_scale, test_max_scale = min_scale, max_scale
 
 x_test = (
     (
-        tf.random.uniform((n_samples, 1, 1), test_min_scale, test_max_scale)  # set spread scale
-        * tf.random.uniform((n_samples, test_set_len, 1), test_min_spread, test_max_spread)  # set spread
+        tf.random.uniform((n_samples, 1, 1), test_min_scale, test_max_scale)  # ? set spread scale
+        * tf.random.uniform((n_samples, test_set_len, 1), -1, 1)  # ? set spread
     )
     +
-    tf.random.uniform((n_samples, 1, 1), test_min_center, test_max_center)  # set center
+    tf.random.uniform((n_samples, 1, 1), test_min_center, test_max_center)  # ? set center
 )
-y_test = tf.reduce_mean(x_test, axis=1, keepdims=True)
+y_test = target_invariant_function(x_test, axis=1, keepdims=True)
 
 # %% Mean absolute error
 
